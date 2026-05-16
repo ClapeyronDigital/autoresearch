@@ -138,14 +138,35 @@ uv pip install torch torchvision
 PYTHONPATH=. python workdir/train.py
 ```
 
-## Что дальше
+## Разработка
 
-Фреймворк — минималистичный. Возможные направления развития:
+```bash
+# Клонировать репозиторий
+git clone git@github.com:ClapeyronDigital/autoresearch.git
+cd autoresearch
 
-- Несколько параллельных агентов на разных ветках
-- Более сложные constraint-ы (time/token budget)
-- Live-дашборд прогресса
-- Менеджмент примеров
+# Установить uv (если нет)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Создать venv и установить зависимости
+uv sync
+
+# Установить фреймворк в dev-режиме
+uv pip install -e .
+
+# Проверить что всё работает
+autoresearch --help
+```
+
+### Сборка и публикация
+
+```bash
+# Собрать пакет
+uv build
+
+# Опубликовать (нужен настроенный PyPI)
+uv publish
+```
 
 ## Лицензия
 
