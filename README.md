@@ -127,9 +127,7 @@ evaluate = Evaluator().evaluate
 
 ```bash
 # Установка
-git clone git@github.com:ClapeyronDigital/autoresearch.git
-cd autoresearch
-uv pip install -e .
+uv tool install git+https://github.com/ClapeyronDigital/autoresearch.git
 
 # Создать новый проект
 autoresearch init my-project
