@@ -5,3 +5,4 @@ results.tsv
 run.log
 dist/
 uv.lock
+runs/
