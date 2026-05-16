@@ -1,0 +1,11 @@
+[project]
+name = "autoresearch-mnist"
+version = "0.1.0"
+description = "Autonomous MNIST classification research — toy autoresearch experiment"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.5",
+    "torch>=2.0",
+    "torchvision>=0.15",
+]
