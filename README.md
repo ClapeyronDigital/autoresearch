@@ -1,16 +1,23 @@
 # autoresearch
 
-Фреймворк для автоматизированного research с измеримым результатом. Внешний AI-агент
-итеративно улучшает кодовую базу: предлагает гипотезы, редактирует код, запускает оценку,
-сохраняет успешные изменения.
+Фреймворк для автоматизированного research — AI-агент итеративно улучшает
+проект, измеряя качество фиксированной метрикой. Вдохновлён
+[autoresearch](https://github.com/karpathy/autoresearch) Андрея Карпатого.
+
+## Суть
+
+`autoresearch init` создаёт проект с тремя зонами:
+
+- **`workdir/`** — что угодно. Агент редактирует код, меняет модель, гиперпараметры, создаёт модули
+- **`eval/`** — функция `evaluate(model) → float`. Пишет человек, фиксирована, агент не может менять
+- **`abstract/`** — базовые классы `ModelBase` и `EvaluatorBase`. Каркас фреймворка
+
+Агент работает циклом: гипотеза → редактирует `workdir/` → коммит → eval →
+если метрика улучшилась — коммит остаётся, иначе `git reset --hard HEAD~1`.
+Успешные коммиты складываются в ветку `autoresearch/<session>`, неудачные
+в git-истории не остаются. Результаты пишутся в `runs/<session>/results.tsv`.
 
 ## Установка
-
-```bash
-pip install autoresearch
-```
-
-Или из исходников:
 
 ```bash
 git clone git@github.com:ClapeyronDigital/autoresearch.git
@@ -21,151 +28,112 @@ uv pip install -e .
 ## Быстрый старт
 
 ```bash
-# 1. Развернуть новый проект
 autoresearch init my-project
 cd my-project
 
-# 2. Реализовать eval/evaluate.py и workdir/model.py под свою задачу
-# 3. Заполнить .autoresearch/project.md — описание, контракты, бейзлайн
+# Реализовать eval/evaluate.py и workdir/model.py под задачу
+# Заполнить .autoresearch/project.md — описание, контракты, бейзлайн
 
-# 4. Проверить что всё корректно
-autoresearch check
+autoresearch check               # проверить что всё корректно
 
-# 5. Закоммитить бейзлайн
 git init && git add -A && git commit -m "baseline"
 
-# 6. Запустить агента
-#    "Hi, have a look at .autoresearch/global.md and let's kick off a new experiment!"
+# Запустить агента:
+#   "Hi, have a look at .autoresearch/global.md and let's kick off a new experiment!"
 ```
 
-## Как это работает
-
-### Проект после `autoresearch init`
+## Как устроен проект
 
 ```
 my-project/
 ├── .autoresearch/
-│   ├── global.md          # Главная точка входа для агента — все правила
-│   ├── project.md         # Описание проекта, контракты, бейзлайн
+│   ├── global.md          # Главная инструкция для агента — точка входа
+│   ├── project.md         # Контракты model↔eval, описание бейзлайна
 │   └── config.yaml        # max_experiments
 ├── abstract/
-│   └── __init__.py        # ModelBase, EvaluatorBase (фиксировано)
+│   └── __init__.py        # ModelBase, EvaluatorBase — фиксировано
 ├── eval/
-│   └── evaluate.py        # evaluate(model) → float (фиксировано)
-├── workdir/               # Рабочая область агента (EDITABLE)
-│   └── model.py            # Model(abstract.ModelBase) — точка входа
-│   └── ...                 # Агент создаёт любые модули
-└── runs/                   # Сессии экспериментов (gitignored)
+│   └── evaluate.py        # evaluate(model) → float — меняет человек
+├── workdir/               # Всё, что здесь — меняет агент
+│   ├── model.py           # class Model(abstract.ModelBase)
+│   └── ...                # Любые модули
+└── runs/                  # Артефакты сессий (в .gitignore)
     └── <session>/
         ├── results.tsv
         ├── progress.png
         └── summary.md
 ```
 
-### Разделение ответственности
-
-| Директория | Кто редактирует | Содержит |
-|-----------|----------------|----------|
-| `abstract/` | Никто (фиксирован) | Базовые классы `ModelBase`, `EvaluatorBase` |
-| `eval/` | Человек (до старта) | Функция оценки `evaluate(model) → float` |
+| Директория | Редактирует | Содержит |
+|-----------|-------------|----------|
+| `abstract/` | Никто | `ModelBase`, `EvaluatorBase` |
+| `eval/` | Человек | Фиксированная метрика |
 | `workdir/` | Агент | Модель, обучение, любые модули |
-| `.autoresearch/` | Человек (до старта) | Инструкции агенту, контракты, конфиг |
+| `.autoresearch/` | Человек | Инструкции, контракты, конфиг |
 
-### Цикл работы агента
+### Git-механика
 
-1. **Изучить контекст** — прочитать `global.md`, `project.md`, `config.yaml`
-2. **Гипотеза** — придумать, что попробовать, и записать reasoning (почему)
-3. **Редактировать `workdir/`** — менять модель, гиперпараметры, создавать новые модули
-4. **Закоммитить** — `git commit`
-5. **Запустить оценку** — выполнить код модели и вызвать `evaluate(model)`
-6. **Извлечь метрику** — grep `^metric:` из вывода
-7. **Записать в `results.tsv`** — commit, metric, status, description, reasoning
-8. **Принять решение:**
-   - `metric > best` → keep (оставить коммит)
-   - `metric <= best` → discard (`git reset --hard HEAD~1`)
-   - Краш → crash (откатить, попробовать починить)
-9. **Повторить** до `max_experiments` или остановки
+Эксперименты идут на ветке `autoresearch/<session>` (отдельной для каждого запуска).
+Каждый эксперимент — коммит. Если метрика улучшилась — коммит остаётся и ветка идёт
+вперёд. Если нет — `git reset --hard HEAD~1`, ветка возвращается к предыдущему
+состоянию. В истории ветки — только успешные изменения.
 
-Агент не спрашивает разрешения — работает автономно.
+### results.tsv
 
-### Контракты
-
-`workdir/model.py` должен содержать класс `Model`, наследующий `abstract.ModelBase`:
-
-```python
-class Model(ModelBase):
-    def predict(self, x):
-        ...  # реализация
+```
+commit	metric	status	description	reasoning
+abc1234	0.9771	keep	baseline MLP	Starting point
+def5678	0.9650	discard	added dropout 0.5	Dropout too aggressive
 ```
 
-`eval/evaluate.py` должен экспортировать функцию `evaluate`, которая принимает модель
-и возвращает `float` (чем больше, тем лучше):
+- `keep` — метрика улучшилась
+- `discard` — не улучшилась
+- `crash` — упало с ошибкой
+
+Метрика всегда один `float`. Чем больше, тем лучше.
+
+### Контракт model↔eval
+
+`workdir/model.py` наследует `ModelBase` и реализует `predict()`:
 
 ```python
+from abstract import ModelBase
+
+class Model(ModelBase):
+    def predict(self, x):
+        ...
+```
+
+`eval/evaluate.py` экспортирует функцию:
+
+```python
+from abstract import EvaluatorBase
+
+class MyEvaluator(EvaluatorBase):
+    def evaluate(self, model) -> float:
+        ...
+
 evaluate = MyEvaluator().evaluate
 ```
 
-Контракт между ними (что `predict` принимает и возвращает) описан в `project.md`.
-
-### Формат результатов
-
-`runs/<session>/results.tsv` (tab-separated):
-
-| commit | metric | status | description | reasoning |
-|--------|--------|--------|-------------|-----------|
-| abc1234 | 0.9771 | keep | baseline MLP | Starting point |
-| def5678 | 0.9650 | discard | added dropout 0.5 | Dropout too aggressive |
+Детали контракта (что подаётся на вход `predict`, что возвращается) описаны в `project.md`.
 
 ## CLI
 
 ```bash
-autoresearch init [path]              # Развернуть новый проект
-autoresearch check [path]             # Проверить проект (6 проверок)
-autoresearch analyze --session NAME   # График прогресса
-```
-
-## Пример: MNIST
-
-На ветке `mnist` лежит полный пример — классификация цифр MNIST:
-
-- `workdir/model.py` — конфигурируемый MLP
-- `workdir/train.py` — тренировочный цикл с фиксированным бюджетом 60 сек
-- `eval/evaluate.py` — accuracy на тестовом наборе
-
-```bash
-git checkout mnist
-uv pip install torch torchvision
-PYTHONPATH=. python workdir/train.py
+autoresearch init [path]              # развернуть новый проект
+autoresearch check [path]             # проверить структуру и контракты (6 проверок)
+autoresearch analyze --session NAME   # построить progress.png по results.tsv
 ```
 
 ## Разработка
 
 ```bash
-# Клонировать репозиторий
 git clone git@github.com:ClapeyronDigital/autoresearch.git
 cd autoresearch
-
-# Установить uv (если нет)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Создать venv и установить зависимости
 uv sync
-
-# Установить фреймворк в dev-режиме
 uv pip install -e .
-
-# Проверить что всё работает
 autoresearch --help
-```
-
-### Сборка и публикация
-
-```bash
-# Собрать пакет
-uv build
-
-# Опубликовать (нужен настроенный PyPI)
-uv publish
 ```
 
 ## Лицензия
