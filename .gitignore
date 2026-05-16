@@ -4,3 +4,4 @@ __pycache__/
 results.tsv
 run.log
 uv.lock
+examples/
