@@ -113,11 +113,11 @@ class Model(ModelBase):
 ```python
 from abstract import EvaluatorBase
 
-class MyEvaluator(EvaluatorBase):
+class Evaluator(EvaluatorBase):
     def evaluate(self, model) -> float:
         ...
 
-evaluate = MyEvaluator().evaluate
+evaluate = Evaluator().evaluate
 ```
 
 Детали контракта (формат входных/выходных данных) описываются в

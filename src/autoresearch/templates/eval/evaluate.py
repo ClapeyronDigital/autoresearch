@@ -1,7 +1,7 @@
 from abstract import EvaluatorBase, ModelBase
 
 
-class MyEvaluator(EvaluatorBase):
+class Evaluator(EvaluatorBase):
     def evaluate(self, model: ModelBase) -> float:
         # TODO: implement model evaluation
         # Call model.predict() on test data, compute metric.
@@ -9,4 +9,4 @@ class MyEvaluator(EvaluatorBase):
         raise NotImplementedError("Implement evaluate() for your project")
 
 
-evaluate = MyEvaluator().evaluate
+evaluate = Evaluator().evaluate
