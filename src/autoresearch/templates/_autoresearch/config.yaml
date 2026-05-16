@@ -1,0 +1,2 @@
+# Framework parameters (static during a session)
+max_experiments: 30   # maximum number of experiments (0 = unlimited)
