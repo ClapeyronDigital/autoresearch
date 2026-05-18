@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates", "_autoresearch")
 
@@ -46,7 +47,8 @@ for name, code in checks:
         tb = traceback.format_exc().strip().split("\n")[-1]
         results.append({{"check": name, "pass": False, "error": tb}})
 
-print(json.dumps(results))
+with open({json_path!r}, "w") as f:
+    json.dump(results, f)
 """
 
 
@@ -80,24 +82,37 @@ def run(target: str) -> int:
         print(f"Error: directory not found: {target}")
         return 1
 
-    script = CHECK_SCRIPT.format(path=target)
-    proc = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True, text=True,
-    )
-
-    if proc.returncode != 0 and not proc.stdout.strip():
-        print("Error: check script failed to run:")
-        print(proc.stderr)
-        return 1
+    # Create temp file for passing results out of the subprocess
+    fd, json_tmp = tempfile.mkstemp(suffix=".json", prefix="autoresearch_check_")
+    os.close(fd)
 
     try:
-        results = json.loads(proc.stdout.strip())
-    except json.JSONDecodeError:
+        script = CHECK_SCRIPT.format(path=target, json_path=json_tmp)
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True, text=True,
+        )
+
+        if proc.returncode != 0 and not os.path.isfile(json_tmp):
+            print("Error: check script failed to run:")
+            print(proc.stderr)
+            return 1
+
+        if not os.path.isfile(json_tmp):
+            print("Error: check script produced no output")
+            print(proc.stdout)
+            print(proc.stderr)
+            return 1
+
+        with open(json_tmp) as f:
+            results = json.load(f)
+    except json.JSONDecodeError as e:
         print("Error: invalid output from check script:")
-        print(proc.stdout)
-        print(proc.stderr)
+        print(e)
         return 1
+    finally:
+        if os.path.isfile(json_tmp):
+            os.remove(json_tmp)
 
     passed = 0
     failed = 0
