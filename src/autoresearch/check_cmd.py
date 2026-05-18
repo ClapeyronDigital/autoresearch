@@ -127,5 +127,10 @@ def run(target: str) -> int:
 
     _print_warnings(target)
 
+    # Print any [WARN] messages from user code (e.g. stub warnings in model.py / evaluate.py)
+    for line in proc.stdout.splitlines():
+        if "[WARN]" in line:
+            print(line)
+
     print(f"\n{passed} passed, {failed} failed")
     return 0 if failed == 0 else 1
