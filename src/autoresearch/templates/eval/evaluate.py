@@ -3,6 +3,7 @@ from abstract import EvaluatorBase, ModelBase
 
 class Evaluator(EvaluatorBase):
     def evaluate(self, model: ModelBase) -> float:
+        model.predict()
         print("[WARN] You are using a stub Evaluator. Implement evaluate() for your project.")
         return 0.0
 
