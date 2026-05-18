@@ -3,6 +3,13 @@ import os
 import subprocess
 import sys
 
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates", "_autoresearch")
+
+with open(os.path.join(TEMPLATES_DIR, "global.md")) as f:
+    DEFAULT_GLOBAL = f.read()
+with open(os.path.join(TEMPLATES_DIR, "project.md")) as f:
+    DEFAULT_PROJECT = f.read()
+
 CHECK_SCRIPT = r"""
 import json, os, sys, traceback
 
@@ -22,11 +29,11 @@ checks = [
      "assert issubclass(Model, ModelBase), 'Model must inherit ModelBase'"),
     ("instantiate Model",
      "from workdir.model import Model\nModel()"),
-    ("import evaluate from eval",
-     "from eval.evaluate import evaluate"),
-    ("evaluate(Model()) returns float",
-     "from workdir.model import Model\nfrom eval.evaluate import evaluate\n"
-     "result = evaluate(Model())\n"
+    ("import Evaluator from eval",
+     "from eval.evaluate import Evaluator"),
+    ("Evaluator().evaluate(Model()) returns float",
+     "from workdir.model import Model\nfrom eval.evaluate import Evaluator\n"
+     "result = Evaluator().evaluate(Model())\n"
      "assert isinstance(result, float), "
      "f'Expected float, got {{type(result).__name__}}'"),
 ]
@@ -41,6 +48,29 @@ for name, code in checks:
 
 print(json.dumps(results))
 """
+
+
+def _print_warnings(target: str):
+    """Check prompt files and print [WARN] lines if something is off."""
+    # global.md — warn if modified
+    global_path = os.path.join(target, ".autoresearch", "global.md")
+    if os.path.isfile(global_path):
+        with open(global_path) as f:
+            content = f.read()
+        if content != DEFAULT_GLOBAL:
+            print("  [WARN] global.md has been modified from the default. Verify this was intentional.")
+    else:
+        print(f"  [WARN] .autoresearch/global.md not found")
+
+    # project.md — warn if still default (user hasn't filled it in)
+    project_path = os.path.join(target, ".autoresearch", "project.md")
+    if os.path.isfile(project_path):
+        with open(project_path) as f:
+            content = f.read()
+        if content == DEFAULT_PROJECT:
+            print("  [WARN] project.md contains the default template. Fill it with your project details.")
+    else:
+        print(f"  [WARN] .autoresearch/project.md not found")
 
 
 def run(target: str) -> int:
@@ -79,6 +109,8 @@ def run(target: str) -> int:
             failed += 1
         else:
             passed += 1
+
+    _print_warnings(target)
 
     print(f"\n{passed} passed, {failed} failed")
     return 0 if failed == 0 else 1

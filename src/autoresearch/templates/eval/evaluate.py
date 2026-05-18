@@ -3,10 +3,8 @@ from abstract import EvaluatorBase, ModelBase
 
 class Evaluator(EvaluatorBase):
     def evaluate(self, model: ModelBase) -> float:
-        # TODO: implement model evaluation
-        # Call model.predict() on test data, compute metric.
-        # Returns float, higher is better.
-        raise NotImplementedError("Implement evaluate() for your project")
+        print("[WARN] You are using a stub Evaluator. Implement evaluate() for your project.")
+        return 0.0
 
 
 if __name__ == "__main__":
