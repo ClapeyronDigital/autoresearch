@@ -14,3 +14,9 @@ class EvaluatorBase(ABC):
 
     @abstractmethod
     def evaluate(self, model: ModelBase) -> float: ...
+
+    def run(self, model: ModelBase) -> None:
+        """Runs the evaluation and prints the metric in the expected format."""
+        metric = self.evaluate(model)
+        print("---")
+        print(f"metric: {metric:.4f}")

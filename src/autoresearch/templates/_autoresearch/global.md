@@ -11,7 +11,14 @@ Before starting, read the project context:
 
 Then set up the session:
 
-1. Choose a short session tag (e.g. `may16`, `run1`).
+1. Check existing branches to determine the next available session tag:
+   ```
+   git branch --list 'autoresearch/*'
+   ```
+   - If no `autoresearch/*` branches exist, start with `run1`.
+   - Otherwise, find the highest existing `runN` number and increment it
+     (e.g. `run1` → `run2`, `run3` → `run4`).
+
 2. Create a branch:
    ```
    git checkout -b autoresearch/<tag>
@@ -64,25 +71,12 @@ git commit -m "brief description of the hypothesis"
 
 ### Step 4: Run Evaluation
 
-Execute the model and call `evaluate()`. You decide how to run it. Examples:
+You must evaluate the model by directly running the standard evaluation script. Custom evaluation runners in `workdir/` are strictly prohibited to ensure fair and consistent evaluation.
 
-**Direct approach:**
-```
-python -c "
-from eval.evaluate import evaluate
-from workdir.model import Model
+Run the evaluation like this:
 
-model = Model()
-# ... train if applicable ...
-metric = evaluate(model)
-print(f'---
-metric: {metric:.4f}')
-"
 ```
-
-**Or via a custom runner in workdir/:**
-```
-python workdir/run.py
+python eval/evaluate.py
 ```
 
 ### Step 5: Extract Metric

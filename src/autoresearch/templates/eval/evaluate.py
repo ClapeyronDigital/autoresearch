@@ -9,4 +9,9 @@ class Evaluator(EvaluatorBase):
         raise NotImplementedError("Implement evaluate() for your project")
 
 
-evaluate = Evaluator().evaluate
+if __name__ == "__main__":
+    from workdir.model import Model
+
+    evaluator = Evaluator()
+    model = Model()
+    evaluator.run(model)
