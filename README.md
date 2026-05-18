@@ -22,6 +22,8 @@ Autoresearch решает это через:
   гарантируют совместимость. `autoresearch check` валидирует до запуска.
 - **Историю эксперимента** — каждый эксперимент это git-коммит. Успешные
   остаются в истории, неудачные откатываются. Чистая ветка лучших решений.
+- **Двухшаговый флоу** — сперва подготовка проекта (агент настраивает метрику
+  и бейзлайн), затем исследование (агент автономно экспериментирует).
 
 ## Что можно исследовать
 
@@ -40,11 +42,27 @@ Autoresearch решает это через:
 ## Как это работает
 
 Autoresearch не запускает агента самостоятельно. Фреймворк задаёт структуру
-проекта и набор правил (файл `.autoresearch/global.md`), по которым AI-агент
-работает в IDE. В роли агента может выступать Claude, GPT или любая LLM,
-способная редактировать файлы и выполнять команды.
+проекта и набор правил, по которым AI-агент работает в IDE. В роли агента
+может выступать Claude, GPT или любая LLM, способная редактировать файлы
+и выполнять команды.
 
-Цикл одного эксперимента:
+Работа делится на **два этапа**:
+
+### Этап 1: Подготовка
+
+Coding-агент читает `research/.autoresearch/prepare.md`, изучает проект
+пользователя и приводит его к формату Autoresearch:
+- Реализует метрику в `eval/evaluate.py`
+- Реализует бейзлайн в `workdir/model.py`
+- Заполняет `project.md` (описание задачи и контракты)
+- Проверяет контракты через `autoresearch check`
+
+На этом этапе агент может задавать уточняющие вопросы пользователю.
+
+### Этап 2: Исследование
+
+Research-агент читает `research/.autoresearch/global.md` и автономно
+проводит эксперименты. Цикл одного эксперимента:
 
 ```
   Гипотеза — что и почему может улучшить метрику
@@ -68,36 +86,46 @@ Autoresearch не запускает агента самостоятельно. 
 
 ## Структура проекта
 
+Autoresearch изолирован в поддиректории `research/`, не смешиваясь
+с исходным кодом пользователя:
+
 ```
 my-project/
-├── .autoresearch/
-│   ├── global.md          # Инструкция для AI-агента — точка входа
-│   ├── project.md         # Описание задачи, контракты model↔eval, бейзлайн
-│   └── config.yaml        # Параметры сессии (max_experiments)
-├── abstract/
-│   └── __init__.py        # ModelBase, EvaluatorBase — не редактируются
-├── eval/
-│   └── evaluate.py        # evaluate(model) → float — пишет человек
-├── workdir/               # Песочница агента — всё, что здесь, он меняет
-│   ├── model.py           # class Model(abstract.ModelBase)
-│   └── ...                # Любые модули, данные, конфиги
-└── runs/                  # Артефакты сессий (в .gitignore)
-    └── <session>/
-        ├── results.tsv
-        ├── progress.png
-        └── summary.md
+├── research/
+│   ├── .autoresearch/
+│   │   ├── prepare.md          # Инструкция для подготовки проекта (coding-агент)
+│   │   ├── global.md           # Инструкция для экспериментов (research-агент)
+│   │   ├── project.md          # Описание задачи, контракты model↔eval, бейзлайн
+│   │   └── config.yaml         # Параметры сессии (max_experiments)
+│   ├── abstract/
+│   │   └── __init__.py         # ModelBase, EvaluatorBase — не редактируются
+│   ├── eval/
+│   │   └── evaluate.py         # evaluate(model) → float — метрика
+│   ├── workdir/                # Песочница агента — всё, что здесь, он меняет
+│   │   └── model.py            # class Model(abstract.ModelBase)
+│   └── runs/                   # Артефакты сессий (в .gitignore)
+│       └── <session>/
+│           ├── results.tsv
+│           ├── progress.png
+│           └── summary.md
+├── src/                        # Оригинальный код пользователя
+├── data/
+├── README.md
+├── AGENTS.md
+├── pyproject.toml
+└── ...
 ```
 
 | Директория | Редактирует | Содержит |
 |-----------|-------------|----------|
-| `abstract/` | Никто | `ModelBase`, `EvaluatorBase` |
-| `eval/` | Человек | Фиксированная метрика |
-| `workdir/` | Агент | Модель, обучение, любые модули |
-| `.autoresearch/` | Человек | Инструкции, контракты, конфиг |
+| `research/abstract/` | Никто | `ModelBase`, `EvaluatorBase` |
+| `research/eval/` | Человек (или coding-агент) | Фиксированная метрика |
+| `research/workdir/` | Research-агент | Модель, обучение, любые модули |
+| `research/.autoresearch/` | Человек (через coding-агента) | Инструкции, контракты, конфиг |
 
 ### Контракт model↔eval
 
-`workdir/model.py` наследует `ModelBase` и реализует `predict()`:
+`research/workdir/model.py` наследует `ModelBase` и реализует `predict()`:
 
 ```python
 from abstract import ModelBase
@@ -107,7 +135,7 @@ class Model(ModelBase):
         ...
 ```
 
-`eval/evaluate.py` экспортирует функцию, которая принимает инстанс модели
+`research/eval/evaluate.py` экспортирует функцию, которая принимает инстанс модели
 и возвращает `float`:
 
 ```python
@@ -121,7 +149,7 @@ evaluate = Evaluator().evaluate
 ```
 
 Детали контракта (формат входных/выходных данных) описываются в
-`.autoresearch/project.md`.
+`research/.autoresearch/project.md`.
 
 ## Быстрый старт
 
@@ -129,35 +157,52 @@ evaluate = Evaluator().evaluate
 # Установка
 uv tool install git+https://github.com/ClapeyronDigital/autoresearch.git
 
-# Создать новый проект
-autoresearch init my-project
+# Создать исследовательскую песочницу внутри существующего проекта
 cd my-project
+autoresearch init research
+cd research
 
-# Реализовать:
-#   eval/evaluate.py   — метрика
-#   workdir/model.py   — модель
-#   .autoresearch/project.md — описание задачи и контракты
+# Теперь project.md, eval/evaluate.py, workdir/model.py — пустые шаблоны.
+# Запусти coding-агента с промптом:
 
-# Проверить, что контракты корректны
-autoresearch check
+#   "Привет! Прочитай research/.autoresearch/prepare.md и приступай к работе!"
 
-# Инициализировать git
-git init && git add -A && git commit -m "baseline"
+# Coding-агент изучит проект, реализует метрику и бейзлайн, заполнит project.md.
+# После успешной подготовки запусти research-агента с промптом:
 
-# Запустить LLM-агента в IDE с инструкцией:
-#   "Hi, have a look at .autoresearch/global.md and let's kick off a new experiment!"
+#   "Привет! Прочитай research/.autoresearch/global.md и приступай к работе!"
+
+# Research-агент начнёт автономные эксперименты, записывая результаты в runs/.
 ```
 
 ### Команды
 
 ```bash
-autoresearch init [path]              # развернуть новый проект
+autoresearch init [path]              # развернуть новую песочницу
 autoresearch check [path]             # проверить контракты (6 проверок)
 autoresearch analyze --session NAME   # построить progress.png по results.tsv
 ```
 
+### Готовые промпты для агентов
+
+Скопируй в чат с AI-агентом нужный:
+
+**Подготовка проекта:**
+```
+Привет! Прочитай research/.autoresearch/prepare.md и приступай к работе!
+```
+
+**Проведение экспериментов:**
+```
+Привет! Прочитай research/.autoresearch/global.md и приступай к работе!
+```
+
+Первый промпт запускает coding-агента (настройка метрики и бейзлайна).
+Второй — research-агента (автономные эксперименты).
+
 ## Git-механика
 
+Для каждой песочницы `research/` — отдельный git-репозиторий.
 Каждая сессия экспериментов идёт на отдельной ветке `autoresearch/<session>`.
 
 1. Агент создаёт ветку от текущего состояния
